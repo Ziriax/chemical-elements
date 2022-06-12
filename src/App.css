@@ -1,6 +1,6 @@
 body {
   font-size: xx-large;
-  margin: 30vmin;
+  margin: 1rem;
 }
 
 .App {
@@ -12,3 +12,17 @@ input {
   width: 10rem;
 }
 
+.retry {
+  color: orangered;
+  font-weight: bold;
+}
+
+.wrong {
+  color: red;
+  font-weight: bold;
+}
+
+.correct {
+  color: green;
+  font-weight: bold;
+}
