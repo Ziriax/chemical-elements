@@ -26,3 +26,7 @@ input {
   color: green;
   font-weight: bold;
 }
+
+.active {
+  outline: 4px solid indianred;
+}

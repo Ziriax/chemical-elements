@@ -2,6 +2,30 @@ import React from 'react';
 import './App.css';
 import ballImage from "./ball.jpg";
 
+const GameModes = {
+  symbols: "Symbols" as const,
+  names: "Names" as const
+};
+
+type SymbolsMode = typeof GameModes.symbols;
+type NamesMode = typeof GameModes.names;
+type GameMode = SymbolsMode | NamesMode;
+
+type GameStat = Record<GameMode, {
+  [question: string]: {
+    numer: number, // number of correct guesses
+    denom: number; // total number of guesses
+    wrong: boolean; // wrongly guessed in last run?
+  }
+}>;
+
+interface Entry {
+  question: string;
+  answer: string;
+  wrong: boolean;
+  bucket: number;
+}
+
 const tableBySymbol: Record<string, string> = {
   H: "waterstof",
   He: "helium",
@@ -126,61 +150,131 @@ const tableBySymbol: Record<string, string> = {
 
 const tableByName = Object.entries(tableBySymbol).reduce<Record<string, string>>((table, [s, n]) => { table[n] = s; return table }, {});
 
+function gameModeSerializer() {
+  const stored = localStorage.getItem("GAME_MODE")
+  const initial: GameMode = stored as GameMode || GameModes.symbols;
+
+  const serialize = (mode: GameMode) => localStorage.setItem("GAME_MODE", mode);
+  return { initial, serialize };
+}
+
+function gameStatSerializer() {
+  const stored = localStorage.getItem("GAME_STAT");
+
+  const initial: GameStat = stored
+    ? JSON.parse(stored) as GameStat
+    : {
+      [GameModes.symbols]: {},
+      [GameModes.names]: {}
+    };
+
+  const serialize = (state: GameStat) => localStorage.setItem("GAME_STAT", JSON.stringify(state));
+  return { initial, serialize };
+
+}
+
+const gameModeState = gameModeSerializer();
+const gameStatState = gameStatSerializer();
+
+function updateGameStats(gs: GameStat, mode: GameMode, question: string, correct: boolean, wrong: boolean): GameStat {
+  const cgs = gs[mode];
+  let { numer, denom } = cgs[question] || { numer: 0, denom: 0 };
+
+  numer += correct ? 1 : 0;
+  denom += 1;
+
+  gs = {
+    ...gs,
+    [mode]: {
+      ...cgs,
+      [question]: {
+        numer,
+        denom,
+        wrong
+      }
+    }
+  };
+
+  console.log(JSON.stringify(gs, null, "\t"));
+
+  return gs;
+}
+
+function getRandomEntries(mode: GameMode) {
+  const stats = gameStatState.initial[mode];
+
+  const table = mode === GameModes.symbols ? tableBySymbol : tableByName;
+
+  const buckets: Record<number, Entry[]> = [];
+
+  Object.entries(table).forEach(([answer, question]) => {
+    const guess = stats[question] || { numer: 0, denom: 0, wrong: false };
+    // If guessed correctly 1/1 -> 1000
+    // If guessed incorrectly 0/1 -> 0, 1/2 -> 500, 2/3 -> 666, 3/4 -> 750
+    // If not guessed yet -> 700
+    // Last guess was wrong -> 0
+    const bucket = guess.wrong
+      ? 0
+      : guess.denom
+        ? Math.round(guess.numer * 1000 / guess.denom)
+        : 700;
+    const entries = buckets[bucket] = (buckets[bucket] || []);
+    const random = Math.floor(Math.random() * entries.length);
+    entries.splice(random, 0, { answer, question, wrong: guess.wrong, bucket });
+  });
+
+  const entries: readonly Entry[] = Object.values(buckets).concat().flat();
+  console.log("entries", JSON.stringify(entries, null, "\t"));
+  return entries;
+}
+
+const initialRandomEntries = {
+  [GameModes.names]: getRandomEntries(GameModes.names),
+  [GameModes.symbols]: getRandomEntries(GameModes.symbols),
+}
+
 function App() {
 
-  const [table, setTable] = React.useState(tableByName);
+  const [randomEntries, setRandomEntries] = React.useState<ReadonlyArray<Entry | null>>([]);
 
-  const storageKey = table === tableByName ? "wrong-names" : "wrong-symbols"
+  const [mode, setMode] = React.useState(gameModeState.initial);
+  React.useEffect(() => gameModeState.serialize(mode), [mode]);
 
-  const autoCapitalize = table === tableByName ? "false" : "true";
+  React.useEffect(() => {
+    setRandomEntries(initialRandomEntries[mode]);
+  }, [mode]);
 
-  const normalizeInput = React.useMemo(() => table === tableByName
-    ? (a: string) => a.trim().toLowerCase()
-    : (a: string) => a.trim(), [table]);
+  const [stat, setStat] = React.useState(gameStatState.initial)
+  React.useEffect(() => gameStatState.serialize(stat), [stat]);
+
+  const normalizeInput = React.useMemo(
+    () => mode === GameModes.names
+      ? (a: string) => a.trim().toLowerCase()
+      : (a: string) => a.trim(),
+    [mode]
+  );
 
   const onGuessNames = React.useCallback(() => {
-    setTable(tableByName);
+    setMode(GameModes.names)
     setCorrect(0);
     setWrong(0);
     setCurrentIndex(0);
   }, []);
 
   const onGuessSymbols = React.useCallback(() => {
-    setTable(tableBySymbol);
+    setMode(GameModes.symbols)
     setCorrect(0);
     setWrong(0);
     setCurrentIndex(0);
   }, []);
 
-  const [reset, setReset] = React.useState(0);
-
-  const [randomEntries, previousWrongCount] = React.useMemo(() => {
-    // Remove previous wrong guesses.
-    const wrongKeys: Record<string, boolean> = JSON.parse(localStorage.getItem(storageKey) || "{}");
-    const entries = Object.entries(table).filter(([key]) => !wrongKeys[key]);
-
-    for (let i = 0; i < entries.length; ++i) {
-      const j = Math.floor(Math.random() * entries.length);
-      const t = entries[i];
-      entries[i] = entries[j];
-      entries[j] = t;
-    }
-
-    const wrongList = Object.keys(wrongKeys);
-    // Insert wrong symbols first
-    wrongList.forEach(key => {
-      entries.unshift([key, table[key]]);
-    });
-
-    return [entries, wrongList.length + 0 * reset];
-  }, [reset, storageKey, table]);
 
   const [correct, setCorrect] = React.useState(0);
   const [wrong, setWrong] = React.useState(0);
 
   const [currentIndex, setCurrentIndex] = React.useState(0);
 
-  const [currentAnswer, currentQuestion] = randomEntries[currentIndex];
+  const currentEntry: Entry | null = randomEntries[currentIndex] || null;
 
   const inputRef = React.useRef<HTMLInputElement>(null);
   const correctRef = React.useRef<HTMLDivElement>(null);
@@ -189,9 +283,9 @@ function App() {
   const lastWrongRef = React.useRef(-1);
 
   const onKey = React.useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (correctRef.current && wrongRef.current && inputRef.current && e.key === "Enter") {
+    if (currentEntry && correctRef.current && wrongRef.current && inputRef.current && e.key === "Enter") {
       const guess = e.currentTarget.value;
-      if (normalizeInput(guess) !== normalizeInput(currentAnswer)) {
+      if (normalizeInput(guess) !== normalizeInput(currentEntry.answer)) {
         if (lastWrongRef.current !== currentIndex) {
           lastWrongRef.current = currentIndex;
           setWrong(w => w + 1);
@@ -200,17 +294,20 @@ function App() {
         correctRef.current.className = "";
         wrongRef.current.className = "wrong";
 
-        const wrongItems: Record<string, boolean> = JSON.parse(localStorage.getItem(storageKey) || "{}");
-        wrongItems[currentAnswer] = true;
-        localStorage.setItem(storageKey, JSON.stringify(wrongItems));
+        setStat(gs => updateGameStats(gs, mode, currentEntry.question, false, true));
       } else {
         inputRef.current.value = "";
 
-        if (lastWrongRef.current !== currentIndex) {
-          const wrongItems: Record<string, boolean> = JSON.parse(localStorage.getItem(storageKey) || "{}");
-          delete wrongItems[currentAnswer];
-          localStorage.setItem(storageKey, JSON.stringify(wrongItems));
-
+        const wasWrong = lastWrongRef.current === currentIndex;
+        setStat(gs => updateGameStats(gs, mode, currentEntry.question, true, wasWrong));
+        if (wasWrong) {
+          // Make sure we ask again after 5 questions
+          setRandomEntries(rs => {
+            const mrs = rs.slice();
+            mrs.splice(currentIndex + 5, 0, currentEntry);
+            return mrs;
+          });
+        } else {
           setCorrect(c => c + 1);
         }
 
@@ -223,7 +320,6 @@ function App() {
           const next = index + 1;
           if (next === randomEntries.length) {
             alert("Klaar!");
-            setReset(r => r + 1);
             return 0;
           } else {
             return next;
@@ -231,19 +327,22 @@ function App() {
         })
       }
     }
-  }, [normalizeInput, currentAnswer, currentIndex, storageKey, randomEntries.length]);
+  }, [currentEntry, currentIndex, mode, normalizeInput, randomEntries]);
 
   React.useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
   }, [currentIndex]);
+
+  const autoCapitalize = mode === GameModes.symbols ? "on" : "off";
+
   return (
     <div className="App">
       <div>
-        <button onClick={onGuessNames}>Namen raden</button>
+        <button onClick={onGuessNames} className={mode === GameModes.names ? "active" : ""}>Namen raden</button>
         &nbsp;
-        <button onClick={onGuessSymbols}>Symbolen raden</button>
+        <button onClick={onGuessSymbols} className={mode === GameModes.symbols ? "active" : ""}>Symbolen raden</button>
       </div>
       <br />
       <div>
@@ -258,9 +357,9 @@ function App() {
         </div>
       </div>
       <br />
-      <code className={currentIndex < previousWrongCount ? "retry" : ""}>{currentQuestion}</code>
+      <code className={currentEntry?.wrong ? "retry" : ""}>{currentEntry?.question}</code>
       &nbsp;
-      <input ref={inputRef} onKeyUp={onKey}  autoComplete="off" autoCorrect="off" autoCapitalize={autoCapitalize} spellCheck="false" />
+      <input ref={inputRef} onKeyUp={onKey} autoComplete="off" autoCorrect="off" autoCapitalize={autoCapitalize} spellCheck="false" />
       <br />
       <br />
       <img src={ballImage} alt="ball" />
