@@ -1,6 +1,6 @@
 body {
-  font-size: xx-large;
-  margin: 1rem;
+  font-size: x-large;
+  margin: 2rem;
 }
 
 .App {
@@ -8,8 +8,9 @@ body {
 }
 
 input {
-  font-size: xx-large;
-  width: 10rem;
+  text-align: center;
+  font-size: x-large;
+  width: 100%;
 }
 
 .retry {
