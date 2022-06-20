@@ -202,12 +202,6 @@ function App() {
           setWrong(w => w + 1);
         }
 
-        lastWrongCnt.current += 1;
-
-        if (lastWrongCnt.current >= 2) {
-          alert(`Het juiste antwoord was\n\n${currentEntry.answer}`);
-          advance(true);
-        }
         correctRef.current.className = "";
         wrongRef.current.className = "wrong";
 
@@ -217,25 +211,39 @@ function App() {
 
         const wasWrong = lastWrongRef.current === currentIndex;
         setStat(gs => updateGameStats(gs, mode, currentEntry.question, true, wasWrong));
-        advance(wasWrong);
-
-        if (!wasWrong) {
+        if (wasWrong) {
+          // Make sure we ask again after 5 questions
+          setRandomEntries(rs => {
+            const mrs = rs.slice();
+            mrs.splice(currentIndex + 5, 0, currentEntry);
+            return mrs;
+          });
+        } else {
           setCorrect(c => c + 1);
         }
 
         correctRef.current.className = "correct";
         wrongRef.current.className = "";
+
+        lastWrongRef.current = -1;
+
+        setCurrentIndex(index => {
+          const next = index + 1;
+          if (next === randomEntries.length) {
+            alert("Klaar!");
+            return 0;
+          } else {
+            return next;
+          }
+        })
       }
     }
-  }, [advance, currentEntry, currentIndex, isCorrectAnswer, mode]);
+  }, [currentEntry, currentIndex, mode, normalizeInput, randomEntries]);
 
   React.useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.value = "";
     }
-    lastWrongCnt.current = 0;
-    lastWrongRef.current = -1;
   }, [currentIndex]);
 
   const autoCapitalize = mode === GameModes.fr ? "on" : "off";
@@ -243,11 +251,11 @@ function App() {
   return (
     <div className="App">
       <div>
-        <button onClick={onGuessNL} className={mode === GameModes.nl ? "active" : ""}>NL</button>
+        <button onClick={onGuessNL} className={mode === GameModes.nl ? "active" : ""}>FR -&gt; NL</button>
         &nbsp;
         &nbsp;
         &nbsp;
-        <button onClick={onGuessFR} className={mode === GameModes.fr ? "active" : ""}>FR</button>
+        <button onClick={onGuessFR} className={mode === GameModes.fr ? "active" : ""}>NL -&gt; FR</button>
       </div>
       <br />
       <div>
