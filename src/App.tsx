@@ -238,7 +238,7 @@ function App() {
     lastWrongRef.current = -1;
   }, [currentIndex]);
 
-  const autoCapitalize = mode === GameModes.fr ? "on" : "off";
+  const autoCapitalize = "off";
 
   return (
     <div className="App">
