@@ -46,7 +46,7 @@ export const questions = {
   "Réussir": "Slagen",
   "Remplir": "Vullen",
   "Brancher": "Aansluiten",
-  "Résouder": "Bezitten",
+  "Résouder": "Oplossen",
   "Vendre": "Verkopen",
   "Retirer": "Afnemen,Afpakken",
   "Rendre": "Teruggeven",
